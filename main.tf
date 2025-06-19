@@ -1,4 +1,5 @@
 resource "aws_cloudfront_origin_access_control" "oac" {
+  provider                         = aws.project
   for_each                          = var.cloudfront_config
   name                              = local.oac_names[each.key]
   description                       = each.value.oac_description
@@ -8,6 +9,7 @@ resource "aws_cloudfront_origin_access_control" "oac" {
 }
 
 resource "aws_cloudfront_vpc_origin" "lb" {
+  provider                         = aws.project
   for_each = {
     for pair in flatten([
       for cf_key, cf in var.cloudfront_config : [
@@ -40,6 +42,7 @@ resource "aws_cloudfront_vpc_origin" "lb" {
 }
 
 resource "aws_cloudfront_distribution" "cloudfront" {
+  provider                         = aws.project
   # checkov:skip=CKV_AWS_216: Se hace envío del enabled desde variables
   # checkov:skip=CKV2_AWS_32: Se hace envio del response header desde variables
   # checkov:skip=CKV2_AWS_47: Se hace envío del web_acl desde variables

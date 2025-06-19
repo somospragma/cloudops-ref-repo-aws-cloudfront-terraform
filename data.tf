@@ -1,4 +1,5 @@
 data "aws_lb" "lb" {
+  provider                         = aws.project
   for_each = {
     for pair in flatten([
       for cf_key, cf in var.cloudfront_config : [
