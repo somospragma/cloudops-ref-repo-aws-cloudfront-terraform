@@ -1,5 +1,5 @@
 resource "aws_cloudfront_origin_access_control" "oac" {
-  provider                         = aws.project
+  provider                          = aws.project
   for_each                          = var.cloudfront_config
   name                              = local.oac_names[each.key]
   description                       = each.value.oac_description
@@ -9,24 +9,24 @@ resource "aws_cloudfront_origin_access_control" "oac" {
 }
 
 resource "aws_cloudfront_vpc_origin" "lb" {
-  provider                         = aws.project
+  provider = aws.project
   for_each = {
     for pair in flatten([
       for cf_key, cf in var.cloudfront_config : [
         for lb_key, lb in cf.lb_origin : {
-          key = "${cf_key}-${lb_key}"
+          key    = "${cf_key}-${lb_key}"
           cf_key = cf_key
           lb_key = lb_key
           config = lb
         }
       ]
-    ]) : pair.key => {
+      ]) : pair.key => {
       cf_key = pair.cf_key
       lb_key = pair.lb_key
       config = pair.config
     }
   }
-  
+
   vpc_origin_endpoint_config {
     name                   = local.vpc_origin_names[each.key]
     arn                    = data.aws_lb.lb[each.value.lb_key].arn
@@ -42,7 +42,7 @@ resource "aws_cloudfront_vpc_origin" "lb" {
 }
 
 resource "aws_cloudfront_distribution" "cloudfront" {
-  provider                         = aws.project
+  provider = aws.project
   # checkov:skip=CKV_AWS_216: Se hace envío del enabled desde variables
   # checkov:skip=CKV2_AWS_32: Se hace envio del response header desde variables
   # checkov:skip=CKV2_AWS_47: Se hace envío del web_acl desde variables
@@ -89,14 +89,14 @@ resource "aws_cloudfront_distribution" "cloudfront" {
   }
 
   default_cache_behavior {
-    allowed_methods          = each.value.default_allowed_methods
-    cached_methods           = each.value.default_cached_methods
-    target_origin_id         = each.value.default_target_origin
-    viewer_protocol_policy   = each.value.default_viewer_protocol_policy
-    cache_policy_id          = each.value.default_cache_policy_id
-    origin_request_policy_id = each.value.default_origin_request_policy_id
+    allowed_methods            = each.value.default_allowed_methods
+    cached_methods             = each.value.default_cached_methods
+    target_origin_id           = each.value.default_target_origin
+    viewer_protocol_policy     = each.value.default_viewer_protocol_policy
+    cache_policy_id            = each.value.default_cache_policy_id
+    origin_request_policy_id   = each.value.default_origin_request_policy_id
     response_headers_policy_id = each.value.default_response_headers_policy_id
-    compress = each.value.default_compress
+    compress                   = each.value.default_compress
     dynamic "function_association" {
       for_each = each.value.default_function_association
       content {
@@ -109,14 +109,14 @@ resource "aws_cloudfront_distribution" "cloudfront" {
   dynamic "ordered_cache_behavior" {
     for_each = each.value.ordered_cache_behavior
     content {
-      path_pattern           = ordered_cache_behavior.value["path_pattern"]
-      allowed_methods        = ordered_cache_behavior.value["allowed_methods"]
-      cached_methods         = ordered_cache_behavior.value["cached_methods"]
-      target_origin_id       = ordered_cache_behavior.value["target_origin_id"]
-      viewer_protocol_policy = ordered_cache_behavior.value["viewer_protocol_policy"]
-      cache_policy_id        = ordered_cache_behavior.value["cache_policy_id"]
+      path_pattern               = ordered_cache_behavior.value["path_pattern"]
+      allowed_methods            = ordered_cache_behavior.value["allowed_methods"]
+      cached_methods             = ordered_cache_behavior.value["cached_methods"]
+      target_origin_id           = ordered_cache_behavior.value["target_origin_id"]
+      viewer_protocol_policy     = ordered_cache_behavior.value["viewer_protocol_policy"]
+      cache_policy_id            = ordered_cache_behavior.value["cache_policy_id"]
       response_headers_policy_id = ordered_cache_behavior.value["response_headers_policy_id"]
-      compress = ordered_cache_behavior.value["compress"]
+      compress                   = ordered_cache_behavior.value["compress"]
       dynamic "function_association" {
         for_each = ordered_cache_behavior.value["function_association"]
         content {
@@ -172,7 +172,7 @@ resource "aws_cloudfront_distribution" "cloudfront" {
 
   tags = merge(
     {
-      Name = local.cloudfront_names[each.key]
+      Name        = local.cloudfront_names[each.key]
       Application = each.value.application != "" ? each.value.application : null
     },
     each.value.additional_tags
