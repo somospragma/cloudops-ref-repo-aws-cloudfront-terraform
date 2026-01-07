@@ -25,7 +25,7 @@ module "cloudfront" {
 - ✅ Configuración de logs
 - ✅ Integración con AWS WAF
 - ✅ Grupos de origen para failover
-- ✅ Asociación de funciones CloudFront
+- ✅ Asociación de funciones CloudFront y Lambda@Edge
 - ✅ Restricciones geográficas
 
 ## Implementación y Configuración
@@ -154,10 +154,17 @@ variable "cloudfront_config" {
     default_origin_request_policy_id   = string       # ID de la política de solicitud de origen
     default_compress                   = bool         # Comprimir respuestas
     
-    # Asociación de funciones para el comportamiento predeterminado
+    # Asociación de funciones CloudFront para el comportamiento predeterminado
     default_function_association = list(object({
+      event_type   = string             # Tipo de evento (viewer-request, viewer-response)
+      function_arn = string             # ARN de la función CloudFront
+    }))
+    
+    # Asociación de funciones Lambda@Edge para el comportamiento predeterminado
+    default_lambda_function_association = list(object({
       event_type   = string             # Tipo de evento (viewer-request, viewer-response, origin-request, origin-response)
-      function_arn = string             # ARN de la función
+      lambda_arn   = string             # ARN de la función Lambda con versión
+      include_body = bool               # Incluir cuerpo de la solicitud/respuesta
     }))
     
     # Comportamientos de caché ordenados
@@ -171,10 +178,17 @@ variable "cloudfront_config" {
       response_headers_policy_id = string        # ID de la política de encabezados de respuesta
       compress                   = bool          # Comprimir respuestas
       
-      # Asociación de funciones para este comportamiento
+      # Asociación de funciones CloudFront para este comportamiento
       function_association = list(object({
-        event_type   = string               # Tipo de evento
-        function_arn = string               # ARN de la función
+        event_type   = string               # Tipo de evento (viewer-request, viewer-response)
+        function_arn = string               # ARN de la función CloudFront
+      }))
+      
+      # Asociación de funciones Lambda@Edge para este comportamiento
+      lambda_function_association = list(object({
+        event_type   = string               # Tipo de evento (viewer-request, viewer-response, origin-request, origin-response)
+        lambda_arn   = string               # ARN de la función Lambda con versión
+        include_body = bool                 # Incluir cuerpo de la solicitud/respuesta
       }))
     }))
     
@@ -354,6 +368,127 @@ module "cloudfront_api" {
     Project = "BedrockAPI"
   }
 }
+```
+
+#### Ejemplo con Lambda@Edge
+
+```hcl
+module "cloudfront_lambda" {
+  source = "git::https://github.com/somospragma/cloudops-ref-repo-aws-cloudfront-terraform.git?ref=v1.2.0"
+  
+  providers = {
+    aws.project = aws.principal
+  }
+  
+  domain      = "app"
+  subdomain   = "secure"
+  environment = "dev"
+  
+  cloudfront_config = {
+    secure_app = {
+      oac_description      = "OAC para aplicación con Lambda@Edge"
+      oac_origin           = "s3"
+      oac_signing_behavior = "always"
+      oac_signing_protocol = "sigv4"
+      comment              = "Distribución con autenticación Lambda@Edge"
+      default_root_object  = "index.html"
+      enabled              = true
+      http_version         = "http2"
+      price_class          = "PriceClass_100"
+      
+      custom_error_responses = []
+      lb_origin = []
+      dns_origin = []
+      
+      s3_origin = [{
+        domain_name = "secure-app-bucket.s3.amazonaws.com"
+        origin_path = ""
+      }]
+      
+      default_allowed_methods        = ["GET", "HEAD", "OPTIONS"]
+      default_cached_methods         = ["GET", "HEAD"]
+      default_target_origin          = "s3-secure"
+      default_viewer_protocol_policy = "redirect-to-https"
+      default_cache_policy_id        = "658327ea-f89d-4fab-a63d-7e88639e58f6"
+      default_compress               = true
+      
+      # CloudFront Functions (ligeras, <1ms)
+      default_function_association = [{
+        event_type   = "viewer-request"
+        function_arn = "arn:aws:cloudfront::123456789012:function/redirect-function"
+      }]
+      
+      # Lambda@Edge Functions (completas, hasta 30s)
+      default_lambda_function_association = [{
+        event_type   = "origin-response"
+        lambda_arn   = "arn:aws:lambda:us-east-1:123456789012:function:security-headers:1"
+        include_body = false
+      }]
+      
+      # Comportamiento específico para API con autenticación
+      ordered_cache_behavior = [{
+        path_pattern           = "/api/*"
+        allowed_methods        = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
+        cached_methods         = ["GET", "HEAD"]
+        target_origin_id       = "s3-secure"
+        viewer_protocol_policy = "https-only"
+        cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad"
+        compress               = true
+        
+        function_association = []
+        lambda_function_association = [{
+          event_type   = "viewer-request"
+          lambda_arn   = "arn:aws:lambda:us-east-1:123456789012:function:auth-function:2"
+          include_body = true
+        }]
+      }]
+      
+      origin_group = []
+      
+      viewer_certificate = [{
+        acm_certificate_arn      = "arn:aws:acm:us-east-1:123456789012:certificate/example"
+        minimum_protocol_version = "TLSv1.2_2021"
+        ssl_support_method       = "sni-only"
+      }]
+      
+      logging_config = []
+      restriction_type = "none"
+    }
+  }
+  
+  additional_tags = {
+    Project = "SecureApp"
+  }
+}
+```
+
+### Comparación: CloudFront Functions vs Lambda@Edge
+
+| Característica | CloudFront Functions | Lambda@Edge |
+|----------------|---------------------|-------------|
+| **Runtime** | JavaScript (V8) | Node.js, Python, Java, C#, Go |
+| **Tiempo de ejecución** | < 1ms | Hasta 30s (viewer), 5s (origin) |
+| **Memoria** | 2MB | Hasta 10GB |
+| **Eventos soportados** | viewer-request, viewer-response | viewer-request, viewer-response, origin-request, origin-response |
+| **Acceso al cuerpo** | Limitado | Completo con `include_body: true` |
+| **Costo** | Menor | Mayor |
+| **Casos de uso** | Redirects, headers simples | Autenticación, APIs externas, lógica compleja |
+| **Ubicación** | Edge locations | Regional edge caches |
+
+### Casos de Uso Recomendados
+
+**CloudFront Functions:**
+- Redirects simples (www → no-www)
+- Manipulación básica de headers
+- Validación de parámetros de URL
+- Normalización de cache keys
+
+**Lambda@Edge:**
+- Autenticación y autorización
+- Modificación de respuestas complejas
+- Integración con APIs externas
+- A/B testing avanzado
+- Optimización de imágenes dinámicas
 ```
 
 ## Consideraciones Operativas

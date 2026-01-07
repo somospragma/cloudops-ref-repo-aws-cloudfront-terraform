@@ -130,6 +130,14 @@ resource "aws_cloudfront_distribution" "cloudfront" {
         function_arn = function_association.value["function_arn"]
       }
     }
+    dynamic "lambda_function_association" {
+      for_each = each.value.default_lambda_function_association
+      content {
+        event_type   = lambda_function_association.value["event_type"]
+        lambda_arn   = lambda_function_association.value["lambda_arn"]
+        include_body = lambda_function_association.value["include_body"]
+      }
+    }
   }
 
   dynamic "ordered_cache_behavior" {
@@ -148,6 +156,14 @@ resource "aws_cloudfront_distribution" "cloudfront" {
         content {
           event_type   = function_association.value["event_type"]
           function_arn = function_association.value["function_arn"]
+        }
+      }
+      dynamic "lambda_function_association" {
+        for_each = ordered_cache_behavior.value["lambda_function_association"]
+        content {
+          event_type   = lambda_function_association.value["event_type"]
+          lambda_arn   = lambda_function_association.value["lambda_arn"]
+          include_body = lambda_function_association.value["include_body"]
         }
       }
     }

@@ -93,6 +93,11 @@ variable "cloudfront_config" {
       event_type   = string
       function_arn = string
     })), {})
+    default_lambda_function_association = optional(map(object({
+      event_type   = string
+      lambda_arn   = string
+      include_body = optional(bool, false)
+    })), {})
     ordered_cache_behavior = optional(map(object({
       path_pattern               = string
       allowed_methods            = list(string)
@@ -105,6 +110,11 @@ variable "cloudfront_config" {
       function_association = optional(map(object({
         event_type   = string
         function_arn = string
+      })), {})
+      lambda_function_association = optional(map(object({
+        event_type   = string
+        lambda_arn   = string
+        include_body = optional(bool, false)
       })), {})
     })), {})
     origin_group = optional(map(object({
@@ -206,5 +216,15 @@ variable "cloudfront_config" {
         contains(keys(v.dns_origin), v.default_target_origin)
     ])
     error_message = "El valor de default_target_origin debe ser una clave válida en s3_origin, lb_origin o dns_origin."
+  }
+  
+  validation {
+    condition = alltrue([
+      for k, v in var.cloudfront_config : alltrue([
+        for func_key, func in v.default_lambda_function_association : 
+          contains(["viewer-request", "viewer-response", "origin-request", "origin-response"], func.event_type)
+      ])
+    ])
+    error_message = "Los event_type para lambda_function_association deben ser: viewer-request, viewer-response, origin-request, origin-response."
   }
 }

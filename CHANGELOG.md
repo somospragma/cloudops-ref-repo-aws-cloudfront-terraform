@@ -5,6 +5,17 @@ Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-07
+
+### Añadido
+- Soporte para Lambda@Edge functions (`lambda_function_association`)
+- Configuración de `include_body` para Lambda@Edge functions
+- Validaciones para event types de Lambda@Edge
+- Soporte para Lambda@Edge en comportamientos de caché ordenados
+
+### Cambiado
+- Documentación actualizada con ejemplos de Lambda@Edge vs CloudFront Functions
+
 ## [1.1.0] - 2026-01-07
 
 ### Añadido
