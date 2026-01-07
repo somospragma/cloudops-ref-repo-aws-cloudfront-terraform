@@ -1,0 +1,71 @@
+client      = "pragma"
+project     = "hefesto"
+environment = "dev"
+aws_region  = "us-east-1"
+profile     = "default"
+
+common_tags = {
+  environment  = "dev"
+  project-name = "hefesto"
+  cost-center  = "-"
+  owner        = "cesar.herrera@pragma.com.co"
+  area         = "cloudops"
+  provisioned  = "terraform"
+  datatype     = "operational"
+}
+
+cloudfront_config = {
+  main = {
+    oac_description      = "Hefesto FrontEnd"
+    oac_origin           = "s3"
+    oac_signing_behavior = "always"
+    oac_signing_protocol = "sigv4"
+    comment              = "Distribución para Hefesto Frontend"
+    default_root_object  = "index.html"
+    enabled              = true
+    http_version         = "http2"
+    aliases              = ["hefesto.pragma.com.co"]
+    price_class          = "PriceClass_All"
+    
+    custom_error_responses = {
+      error403 = {
+        error_caching_min_ttl = "10"
+        error_code            = "403"
+        response_code         = "200"
+        response_page_path    = "/index.html"
+      }
+    }
+    
+    s3_origin = {
+      "hefesto-front" = {
+        domain_name = "hefesto-front.s3.us-east-1.amazonaws.com"
+        origin_path = ""
+      }
+    }
+    
+    default_allowed_methods        = ["HEAD", "DELETE", "POST", "GET", "OPTIONS", "PUT", "PATCH"]
+    default_cached_methods         = ["HEAD", "GET", "OPTIONS"]
+    default_target_origin          = "hefesto-front"
+    default_viewer_protocol_policy = "redirect-to-https"
+    default_cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # Managed-CachingDisabled
+    default_compress               = true
+    
+    viewer_certificate = {
+      main = {
+        acm_certificate_arn      = "arn:aws:acm:us-east-1:008971642453:certificate/7cb55d32-3f7c-4311-9b78-5d6da1cc6448"
+        minimum_protocol_version = "TLSv1.2_2021"
+        ssl_support_method       = "sni-only"
+      }
+    }
+    
+    # Configuración de restricción geográfica
+    restriction_type = "none"  # Puede ser "none", "whitelist" o "blacklist"
+    geo_restriction_locations = []  # Lista de códigos de país ISO 3166-1-alpha-2, ej: ["US", "CA", "MX"]
+    
+    application = "hefesto"
+    
+    additional_tags = {
+      Application = "hefesto"
+    }
+  }
+}
