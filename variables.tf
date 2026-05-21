@@ -105,6 +105,7 @@ variable "cloudfront_config" {
       target_origin_id           = string
       viewer_protocol_policy     = string
       cache_policy_id            = string
+      origin_request_policy_id   = optional(string, "")
       response_headers_policy_id = optional(string, "")
       compress                   = bool
       function_association = optional(map(object({

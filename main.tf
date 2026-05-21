@@ -149,6 +149,7 @@ resource "aws_cloudfront_distribution" "cloudfront" {
       target_origin_id           = ordered_cache_behavior.value["target_origin_id"]
       viewer_protocol_policy     = ordered_cache_behavior.value["viewer_protocol_policy"]
       cache_policy_id            = ordered_cache_behavior.value["cache_policy_id"]
+      origin_request_policy_id   = ordered_cache_behavior.value["origin_request_policy_id"]
       response_headers_policy_id = ordered_cache_behavior.value["response_headers_policy_id"]
       compress                   = ordered_cache_behavior.value["compress"]
       dynamic "function_association" {
