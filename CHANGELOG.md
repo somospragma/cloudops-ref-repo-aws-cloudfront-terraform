@@ -5,6 +5,16 @@ Todos los cambios notables en este proyecto serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-11-11
+### Añadido
+- Soporte para orígenes Lambda Function URL protegidos con OAC (`lambda_origin`)
+- Recurso `aws_cloudfront_origin_access_control.oac_lambda` (tipo `lambda`), un OAC por cada `lambda_origin`
+- Output `oac_lambda_info` con IDs y ARNs de los OAC de Lambda
+- Validaciones de `lambda_origin` (hostname sin esquema, firma `sigv4`) y de `default_target_origin`
+### Cambiado
+- Versión mínima del provider AWS: `>= 5.82.0` (soporte OAC tipo `lambda` desde 5.46.0 y `aws_cloudfront_vpc_origin` desde 5.82.0)
+### Notas
+- El `aws_lambda_permission` que autoriza a CloudFront a invocar la Function URL NO es gestionado por el módulo (PC-IAC-023); debe crearse por aparte
 ## [1.2.0] - 2026-01-07
 
 ### Añadido

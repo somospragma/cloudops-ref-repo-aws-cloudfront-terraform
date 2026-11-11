@@ -81,6 +81,17 @@ variable "cloudfront_config" {
       origin_read_timeout    = optional(number, 30)
       custom_headers         = optional(map(string), {})
     })), {})
+    lambda_origin = optional(map(object({
+      domain_name              = string
+      origin_path              = optional(string, "")
+      oac_description          = optional(string, "OAC para Lambda Function URL")
+      oac_signing_behavior     = optional(string, "always")
+      oac_signing_protocol     = optional(string, "sigv4")
+      https_port               = optional(number, 443)
+      origin_ssl_protocols     = optional(list(string), ["TLSv1.2"])
+      origin_keepalive_timeout = optional(number, 5)
+      origin_read_timeout      = optional(number, 30)
+    })), {})
     default_allowed_methods            = list(string)
     default_cached_methods             = list(string)
     default_target_origin              = string
@@ -204,9 +215,9 @@ variable "cloudfront_config" {
   validation {
     condition = alltrue([
       for k, v in var.cloudfront_config : 
-        length(v.s3_origin) > 0 || length(v.lb_origin) > 0 || length(v.dns_origin) > 0
+        length(v.s3_origin) > 0 || length(v.lb_origin) > 0 || length(v.dns_origin) > 0 || length(v.lambda_origin) > 0
     ])
-    error_message = "Debe proporcionar al menos un origen S3, un origen de balanceador de carga o un origen DNS."
+    error_message = "Debe proporcionar al menos un origen S3, un origen de balanceador de carga, un origen DNS o un origen Lambda."
   }
   
   validation {
@@ -214,9 +225,28 @@ variable "cloudfront_config" {
       for k, v in var.cloudfront_config : 
         contains(keys(v.s3_origin), v.default_target_origin) || 
         contains(keys(v.lb_origin), v.default_target_origin) ||
-        contains(keys(v.dns_origin), v.default_target_origin)
+        contains(keys(v.dns_origin), v.default_target_origin) ||
+        contains(keys(v.lambda_origin), v.default_target_origin)
     ])
-    error_message = "El valor de default_target_origin debe ser una clave válida en s3_origin, lb_origin o dns_origin."
+    error_message = "El valor de default_target_origin debe ser una clave válida en s3_origin, lb_origin, dns_origin o lambda_origin."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for k, v in var.cloudfront_config : [
+        for lk, l in v.lambda_origin : !can(regex("^https?://|/", l.domain_name))
+      ]
+    ]))
+    error_message = "El domain_name de lambda_origin debe ser solo el hostname de la Function URL (sin 'https://' ni '/')."
+  }
+
+  validation {
+    condition = alltrue(flatten([
+      for k, v in var.cloudfront_config : [
+        for lk, l in v.lambda_origin : contains(["always", "never", "no-override"], l.oac_signing_behavior) && l.oac_signing_protocol == "sigv4"
+      ]
+    ]))
+    error_message = "En lambda_origin, oac_signing_behavior debe ser 'always', 'never' o 'no-override' y oac_signing_protocol debe ser 'sigv4'."
   }
   
   validation {

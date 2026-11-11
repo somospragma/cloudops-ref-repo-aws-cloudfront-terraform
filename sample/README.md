@@ -62,6 +62,14 @@ Características configuradas:
 - Política de caché optimizada
 - TLS 1.2 como versión mínima del protocolo
 
+### Origen Lambda Function URL con OAC
+El ejemplo incluye un `lambda_origin` (`hefesto-api`) servido en el path `/api/*`. El módulo crea el OAC de tipo `lambda` y el origin, pero **no crea el permiso de invocación**: el sample lo crea por aparte en `main.tf` (`aws_lambda_permission.cloudfront_invoke_url`), activado al informar `lambda_function_name`.
+
+Requisitos:
+- La Function URL debe tener `authorization_type = "AWS_IAM"`.
+- Reemplace `domain_name` por el hostname real de la Function URL (sin `https://` ni `/`).
+- Para requests POST/PUT el cliente debe enviar el header `x-amz-content-sha256` y no se debe reenviar el header `Host` al origen.
+
 ## Limpieza
 
 Para eliminar todos los recursos creados:

@@ -59,6 +59,16 @@ variable "common_tags" {
   }
 }
 
+variable "lambda_function_name" {
+  description = "Nombre de la Lambda cuya Function URL (AWS_IAM) es origen de CloudFront. Si se informa, el sample crea el aws_lambda_permission por fuera del módulo. Vacío = no se crea"
+  type        = string
+  default     = ""
+}
+variable "lambda_distribution_key" {
+  description = "Clave de cloudfront_config cuyo ARN se usa como source_arn del permiso de la Lambda"
+  type        = string
+  default     = "main"
+}
 variable "cloudfront_config" {
   description = "Configuración de distribuciones CloudFront"
   type = map(object({
@@ -89,6 +99,17 @@ variable "cloudfront_config" {
       https_port             = optional(number, 443)
       origin_protocol_policy = optional(string, "https-only")
       origin_ssl_protocol    = optional(string, "TLSv1.2")
+    })), {})
+    lambda_origin = optional(map(object({
+      domain_name              = string
+      origin_path              = optional(string, "")
+      oac_description          = optional(string, "OAC para Lambda Function URL")
+      oac_signing_behavior     = optional(string, "always")
+      oac_signing_protocol     = optional(string, "sigv4")
+      https_port               = optional(number, 443)
+      origin_ssl_protocols     = optional(list(string), ["TLSv1.2"])
+      origin_keepalive_timeout = optional(number, 5)
+      origin_read_timeout      = optional(number, 30)
     })), {})
     default_allowed_methods            = list(string)
     default_cached_methods             = list(string)

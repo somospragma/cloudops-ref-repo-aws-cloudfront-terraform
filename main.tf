@@ -8,6 +8,15 @@ resource "aws_cloudfront_origin_access_control" "oac" {
   signing_protocol                  = each.value.oac_signing_protocol
 }
 
+resource "aws_cloudfront_origin_access_control" "oac_lambda" {
+  provider                          = aws.project
+  for_each                          = local.lambda_origins
+  name                              = local.oac_lambda_names[each.key]
+  description                       = each.value.config.oac_description
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = each.value.config.oac_signing_behavior
+  signing_protocol                  = each.value.config.oac_signing_protocol
+}
 resource "aws_cloudfront_vpc_origin" "lb" {
   provider = aws.project
   for_each = {
@@ -114,6 +123,23 @@ resource "aws_cloudfront_distribution" "cloudfront" {
     }
   }
 
+  dynamic "origin" { //Origins de Lambda Function URL con OAC
+    for_each = each.value.lambda_origin
+    content {
+      origin_id                = origin.key
+      domain_name              = origin.value["domain_name"]
+      origin_path              = origin.value["origin_path"]
+      origin_access_control_id = aws_cloudfront_origin_access_control.oac_lambda["${each.key}-${origin.key}"].id
+      custom_origin_config {
+        http_port                = 80
+        https_port               = origin.value["https_port"]
+        origin_protocol_policy   = "https-only"
+        origin_ssl_protocols     = origin.value["origin_ssl_protocols"]
+        origin_keepalive_timeout = origin.value["origin_keepalive_timeout"]
+        origin_read_timeout      = origin.value["origin_read_timeout"]
+      }
+    }
+  }
   default_cache_behavior {
     allowed_methods            = each.value.default_allowed_methods
     cached_methods             = each.value.default_cached_methods

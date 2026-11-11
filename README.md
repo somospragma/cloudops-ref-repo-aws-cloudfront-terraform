@@ -20,6 +20,7 @@ module "cloudfront" {
 - ✅ Configuración de orígenes S3 con Origin Access Control (OAC)
 - ✅ Configuración de orígenes VPC (ALB)
 - ✅ Configuración de orígenes DNS personalizados (HTTPS endpoints)
+- ✅ Orígenes Lambda Function URL con Origin Access Control (OAC tipo `lambda`). El permiso de invocación se crea por aparte
 - ✅ Comportamientos de caché personalizados
 - ✅ Certificados SSL/TLS con ACM
 - ✅ Configuración de logs
@@ -35,7 +36,7 @@ module "cloudfront" {
 | Nombre | Versión |
 |--------|---------|
 | terraform | >= 1.0.0 |
-| aws | >= 4.31.0 |
+| aws | >= 5.82.0 |
 
 ### Provider Configuration
 
@@ -74,7 +75,10 @@ module "cloudfront" {
 |--------|------|
 | aws_cloudfront_distribution | Distribución CloudFront |
 | aws_cloudfront_origin_access_control | Control de acceso de origen para S3 |
+| aws_cloudfront_origin_access_control (oac_lambda) | Control de acceso de origen tipo `lambda` para Lambda Function URL |
 | aws_cloudfront_vpc_origin | Origen VPC para ALB |
+
+> El `aws_lambda_permission` que autoriza a CloudFront a invocar la Function URL **no es gestionado por este módulo** y debe crearse por aparte.
 
 ### Parámetros de Entrada
 
@@ -143,6 +147,20 @@ variable "cloudfront_config" {
       origin_read_timeout      = number              # Timeout de lectura en segundos
       custom_headers           = map(string)         # Encabezados personalizados
     }))
+
+    # Orígenes Lambda Function URL protegidos con OAC (opcional, default {})
+    # NOTA: el aws_lambda_permission NO lo crea el módulo; debe crearse por aparte
+    lambda_origin = optional(map(object({
+      domain_name              = string                          # Hostname de la Function URL (sin https:// ni /)
+      origin_path              = optional(string, "")            # Ruta en el origen
+      oac_description          = optional(string, "OAC para Lambda Function URL")
+      oac_signing_behavior     = optional(string, "always")      # always, never, no-override
+      oac_signing_protocol     = optional(string, "sigv4")       # sigv4
+      https_port               = optional(number, 443)
+      origin_ssl_protocols     = optional(list(string), ["TLSv1.2"])
+      origin_keepalive_timeout = optional(number, 5)
+      origin_read_timeout      = optional(number, 30)
+    })), {})
     
     # Configuración del comportamiento de caché predeterminado
     default_allowed_methods            = list(string) # Métodos HTTP permitidos
@@ -227,6 +245,7 @@ variable "cloudfront_config" {
 | Nombre | Descripción |
 |--------|-------------|
 | cloudfront_info | Información sobre las distribuciones CloudFront creadas, incluyendo domain_name, cloudfront_id y cloudfront_arn |
+| oac_lambda_info | IDs y ARNs de los OAC de orígenes Lambda, con clave `<cloudfront>-<lambda_origin>` |
 
 ### Ejemplos de Uso
 
@@ -369,6 +388,74 @@ module "cloudfront_api" {
   }
 }
 ```
+
+#### Ejemplo con Origen Lambda Function URL (OAC)
+
+> ⚠️ **IMPORTANTE: el permiso de invocación NO lo crea este módulo.**
+> Siguiendo PC-IAC-023 (Diseño Monolítico Funcional), el módulo solo crea el OAC de tipo `lambda` y el origin. El permiso `aws_lambda_permission` que autoriza a CloudFront a invocar la función **debe crearse por aparte** (en el Root IaC o en el módulo de la Lambda), de lo contrario CloudFront recibirá `403 Forbidden`.
+
+```hcl
+module "cloudfront_lambda_url" {
+  source = "git::https://github.com/somospragma/cloudops-ref-repo-aws-cloudfront-terraform.git?ref=v1.3.0"
+
+  providers = {
+    aws.project = aws.principal
+  }
+
+  client      = "pra"
+  project     = "demo"
+  environment = "dev"
+
+  cloudfront_config = {
+    metadata = {
+      oac_description      = "OAC S3 (requerido por la variable, no se usa sin s3_origin)"
+      oac_origin           = "s3"
+      oac_signing_behavior = "always"
+      oac_signing_protocol = "sigv4"
+      comment              = "Distribución con Lambda Function URL"
+      default_root_object  = ""
+      enabled              = true
+      http_version         = "http2"
+      price_class          = "PriceClass_100"
+
+      lambda_origin = {
+        lambda_metadata = {
+          domain_name = "abc123xyz.lambda-url.us-east-1.on.aws" # Solo hostname, sin https:// ni /
+          origin_path = ""
+        }
+      }
+
+      default_allowed_methods        = ["GET", "HEAD"]
+      default_cached_methods         = ["GET", "HEAD"]
+      default_target_origin          = "lambda_metadata"
+      default_viewer_protocol_policy = "redirect-to-https"
+      default_cache_policy_id        = "4135ea2d-6df8-44a3-9df3-4b5a84be39ad" # CachingDisabled
+      default_compress               = true
+      restriction_type               = "none"
+    }
+  }
+}
+
+# Permiso de invocación: se crea FUERA del módulo (Root IaC)
+resource "aws_lambda_permission" "cloudfront_invoke_url" {
+  provider               = aws.principal
+  statement_id           = "AllowCloudFrontServicePrincipal"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = "pra-demo-dev-metadata"
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = module.cloudfront_lambda_url.cloudfront_info["metadata"].cloudfront_arn
+  function_url_auth_type = "AWS_IAM"
+}
+```
+
+Requisitos y consideraciones para `lambda_origin`:
+
+- La Function URL debe tener `authorization_type = "AWS_IAM"`.
+- Debe crearse por aparte el `aws_lambda_permission` mostrado arriba. Verifique en la documentación de AWS si, además de `lambda:InvokeFunctionUrl`, su función requiere `lambda:InvokeFunction`, y créelo también en ese caso.
+- Se crea un OAC (`origin_access_control_origin_type = "lambda"`) por cada entrada de `lambda_origin`; sus IDs se exponen en el output `oac_lambda_info`.
+- Para requests con body (POST/PUT) el cliente debe enviar el header `x-amz-content-sha256` con el hash SHA-256 del body.
+- No reenvíe el header `Host` al origen (por ejemplo, use la origin request policy `AllViewerExceptHostHeader`), ya que rompe la firma SigV4.
+- `domain_name` es solo el hostname de la URL (`<url-id>.lambda-url.<region>.on.aws`).
 
 #### Ejemplo con Lambda@Edge
 
@@ -518,6 +605,7 @@ module "cloudfront_lambda" {
 - Se recomienda usar TLSv1.2_2021 o superior como versión mínima del protocolo
 - Implemente AWS WAF para protección adicional contra amenazas web
 - Utilice OAC para acceso seguro a buckets S3
+- Utilice `lambda_origin` (OAC tipo `lambda`) para exponer una Lambda Function URL con `authorization_type = "AWS_IAM"`, evitando que la URL quede pública
 - Configure políticas de encabezados de respuesta para mejorar la seguridad del navegador
 
 ### Mejores Prácticas Implementadas
